@@ -1,5 +1,6 @@
 import express from 'express';
 import { appointments, assignTask, blocks, containerDetail, containers, createContainer, createGateAppointment, createYardTask, dashboard, deleteContainer, deleteGateAppointment, deleteYardTask, editGateAppointment, equipment, gateConflicts, prioritizeTasks, tasks, updateContainer, updateYardTask, voyages, yardHeatmap } from './domain.js';
+import { activeForecast, createClosure, deleteClosure, executeMitigation, forecastVersions, getForecast, listClosures, runForecast, simulateMitigation, updateClosure } from './forecast.js';
 const app = express(); app.use(express.json());
 app.get('/api/dashboard', (_req, res) => res.json(dashboard()));
 app.get('/api/voyages', (_req, res) => res.json(voyages));
@@ -21,5 +22,15 @@ app.post('/api/tasks', (req, res) => { try { res.status(201).json(createYardTask
 app.patch('/api/tasks/:id', (req, res) => { try { const result = updateYardTask(req.params.id, req.body); if (!result) return res.status(404).json({ message: '作业任务不存在' }); res.json(result); } catch (error) { res.status(409).json({ message: error instanceof Error ? error.message : '更新作业任务失败' }); } });
 app.delete('/api/tasks/:id', (req, res) => { const result = deleteYardTask(req.params.id); if (!result) return res.status(404).json({ message: '作业任务不存在' }); res.json({ deleted: true, id: result.id }); });
 app.patch('/api/tasks/:id/assign', (req, res) => { const result = assignTask(req.params.id, req.body.equipmentId); if (!result) return res.status(404).json({ message: '任务或设备不存在' }); res.json(result); });
+app.get('/api/forecast/versions', (_req, res) => res.json(forecastVersions()));
+app.get('/api/forecast/active', (_req, res) => res.json(activeForecast() ?? runForecast()));
+app.get('/api/forecast/:id', (req, res) => { const version = getForecast(req.params.id); if (!version) return res.status(404).json({ message: '预测版本不存在' }); res.json(version); });
+app.post('/api/forecast/run', (req, res) => { try { res.status(201).json(runForecast(req.body ?? {})); } catch (error) { res.status(400).json({ message: error instanceof Error ? error.message : '预测失败' }); } });
+app.post('/api/forecast/simulate', (req, res) => { try { res.json(simulateMitigation(Array.isArray(req.body?.actions) ? req.body.actions : [], req.body?.options ?? {})); } catch (error) { res.status(400).json({ message: error instanceof Error ? error.message : '场景模拟失败' }); } });
+app.post('/api/forecast/execute', (req, res) => { try { const actions = Array.isArray(req.body?.actions) ? req.body.actions : []; if (!actions.length) return res.status(400).json({ message: '至少指定一个缓解动作' }); res.json(executeMitigation(actions)); } catch (error) { res.status(409).json({ message: error instanceof Error ? error.message : '执行缓解动作失败' }); } });
+app.get('/api/yard/closures', (_req, res) => res.json(listClosures()));
+app.post('/api/yard/closures', (req, res) => { try { res.status(201).json(createClosure(req.body)); } catch (error) { res.status(409).json({ message: error instanceof Error ? error.message : '封闭登记失败' }); } });
+app.patch('/api/yard/closures/:id', (req, res) => { try { const result = updateClosure(req.params.id, req.body); if (!result) return res.status(404).json({ message: '封闭记录不存在' }); res.json(result); } catch (error) { res.status(409).json({ message: error instanceof Error ? error.message : '封闭更新失败' }); } });
+app.delete('/api/yard/closures/:id', (req, res) => { const result = deleteClosure(req.params.id); if (!result) return res.status(404).json({ message: '封闭记录不存在' }); res.json({ deleted: true, id: result.id }); });
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'port-yard-operations' }));
 const port = Number(process.env.PORT || 4107); app.listen(port, () => console.log(`port yard API listening on ${port}`));
